@@ -69,3 +69,4 @@ class MeasurementHandler(BaseSaveHandler):
                 return False
             else:
                 info.object.load_from_file(fileDialog.path)
+

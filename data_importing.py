@@ -15,20 +15,48 @@ from file_selector import FileSelectionTool
 from measurement import SpectrumMeasurement, BaseMeasurement
 from auxilary_functions import color_map, wl_to_rgb, organize_data, read_ascii_file
 #from crystal import Crystal
+from pyface.api import confirm, error, YES, CANCEL
 try:
     import cPickle as pickle
 except:
     import pickle
 
 
-class AutoSpectrumImportTool(HasTraits):
-    crystal = Any() #Instance(Crystal)
+class AutoSpectrumImportToolHandler(Handler):
 
+    def import_data(self,info,group):
+        org_data = info.object.import_group(group)
+        if org_data is not None:
+            if len(org_data):
+                code = confirm(info.ui.control, 'Data imported successfully, continue importing? Press Cancel to discard data',
+                               title="Import more data?", cancel=True)
+
+                if code == CANCEL:
+                    return
+                else:
+                    info.object.store_data(org_data)
+                    if code == YES:
+                        return
+                    else:
+                        info.ui.dispose()
+        else:
+            error(None, 'Data extraction unsuccessful', title='No Data')
+
+    def object_import_all_changed(self,info):
+        self.import_data(info,info.object.selector.filtered_names)
+
+
+    def import_selected_changed(self,info):
+        self.import_data(info,info.object.selector.selected)
+
+
+class AutoSpectrumImportTool(HasTraits):
+    experiment = Any() #Instance(Crystal)
     selector = Instance(FileSelectionTool)
     delimiter = Str(' ')
     #mode = Enum(['New Measurement', 'Append to Selected'])
-    import_selected = Button('Import Selected')
-    import_all = Button('Import All')
+    import_selected = Button(name='Import Selected',action='import_selected_fired')
+    import_all = Button(name='Import All')
 
     view = View(
         VGroup(
@@ -42,17 +70,18 @@ class AutoSpectrumImportTool(HasTraits):
         ),
         ),
         buttons=['OK'],
-        kind='modal'
+        kind='modal',
+        handler=AutoSpectrumImportToolHandler(),
     )
 
-    def __init__(self, crystal):
+    def __init__(self, experiment):
         HasTraits.__init__(self)
-        self.crystal = crystal
+        self.experiment = experiment
+
 
 
     def _selector_default(self):
         return FileSelectionTool()
-
 
     def import_group(self, names):
         dir_path = self.selector.dir
@@ -61,26 +90,29 @@ class AutoSpectrumImportTool(HasTraits):
             path = os.path.join(dir_path, name)
             if os.path.isfile(path):
                 data[name] = read_ascii_file(path, self.delimiter)
-
-        return organize_data(data)
+        organized = organize_data(data)
+        return organized
 
     def store_data(self,org_data):
-        for name, meas in org_data.items():
-            new = self.crystal.add_new()
-            new.signal = meas.get('sig',[])
-            new.bg = meas.get('bgd', [])
-            new.ref = meas.get('ref', [])
+        for name, data in org_data.items():
+            new = self.experiment.add_new()
+            new.name = name
+            try:
+                ex_wl = eval(name.split('in')[0])
+                if isinstance(ex_wl, (float, int)):
+                    new.ex_wl = ex_wl
+            except:
+                pass
+            new.signal = data.get('sig',([],[]))[0]
+            new.bg = data.get('bgd', ([],[]))[0]
+            new.ref = data.get('ref', ([],[]))[0]
+            new.file_data = {}
+            new.file_data['sig'] = data.get('sig', ([], []))[1]
+            new.file_data['bgd'] = data.get('bgd', ([], []))[1]
+            new.file_data['ref'] = data.get('ref', ([], []))[1]
 
 
-    def _import_all_fired(self):
-        org_data = self.import_group(self.selector.filtered_names)
-        self.store_data(org_data)
-
-    def _import_selected(self):
-        org_data = self.import_group(self.selector.selected)
-        self.store_data(org_data)
-
-
+"""
 class BaseDataImportTool(HasTraits):
     main = Any()
     selector = Instance(FileSelectionTool)
@@ -111,6 +143,7 @@ class BaseDataImportTool(HasTraits):
     def _selector_default(self):
         return FileSelectionTool()
 
+
 class NewDataImportTool(HasTraits):
 
     def import_group(self,group):
@@ -121,7 +154,7 @@ class NewDataImportTool(HasTraits):
             if os.path.isfile(path):
                 #data = self.import_file(path,self.delimiter)
                 if self.meas_type == 'Spectrum':
-                    spec = SpectrumMeasurement(self.main)
+                    spec = SpectrumMeasurement(main=self.main)
                 spec.load_from_file(path,self.delimiter,self.kind)
                 collection.append(spec)
         return collection
@@ -162,6 +195,7 @@ class AppendDataImportTool(HasTraits):
         buttons=['OK'],
         kind='modal'
     )
+
     def _import_selected_fired(self):
         self.meas.load_from_file(self.path, self.delimiter, self.kind)
 
@@ -169,3 +203,4 @@ class AppendDataImportTool(HasTraits):
         HasTraits.__init__(self)
         self.meas = meas
 
+"""

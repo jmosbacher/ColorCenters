@@ -56,22 +56,28 @@ class MainApplication(CanSaveMixin):
 
     #####       GUI View     #####
     traits_view = View(
+            HSplit(
+
+                Item(name='projects', show_label=False, editor=ProjectTableEditor(selected='selected',
+                    edit_view = View(
 
 
-            VGroup(
-
-            Group(
-                Item(name='projects', show_label=False, editor=ProjectTableEditor(selected='selected')),
-                show_border=True, label='Projects'),
+                                    Item(name='name', label='Name'),
+                                    Item(name='comments', label='Comments', springy=True),
 
 
-            show_border=True, label=''),
+                            )),
+                     width=0.35),
+
+            Group(Item(name='selected',show_label=False,style='custom')),
+
+            ),
 
         title='Spectrum Project Manager',
         scrollable=True,
         resizable=True,
-        height=600,
-        width=850,
+        height=800,
+        width=1280,
         handler=MainSaveHandler(),
         menubar=MenuBar(
             Menu(save_a, save_as_a,cfg_autosave, load_all, load_from_a,
@@ -85,19 +91,18 @@ class MainApplication(CanSaveMixin):
 
     #####       Initialization Methods      #####
     def _projects_default(self):
-        return [Project(self)]
+        return [Project(main=self)]
 
     def _selected_default(self):
         if len(self.projects):
             return self.projects[0]
 
     #####       Methods      #####
-
     def _rem_selected(self):
         self.projects.remove(self.selected)
 
     def _add_new(self):
-        new = Project(self)
+        new = Project(main=self)
         self.projects.append(new)
         self.selected = new
 
@@ -111,7 +116,6 @@ class MainApplication(CanSaveMixin):
         self.status = 'Saving...'
         with open(self.filepath,'wb') as f:
             pickle.dump(self.projects, f)
-
         self.status = stat
 
     def load(self):

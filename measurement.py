@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 import matplotlib.colors as colors
 import matplotlib.cm as cmx
 from auxilary_functions import wl_to_rgb
+from file_selector import string_list_editor
 import numpy as np
 import random
 import pandas as pd
@@ -16,6 +17,28 @@ try:
     import cPickle as pickle
 except:
     import pickle
+
+class FileDataViewer(HasTraits):
+    data = Dict({'sig':[], 'bgd':[], 'ref':[]})
+    sig_data = List()
+    bgd_data = List()
+    ref_data = List()
+
+    view = View(
+        VGroup(
+            Group(Item(name='sig_data',editor=string_list_editor, show_label=False),show_border=True,label='Signal File'),
+
+            Group(Item(name='bgd_data',editor=string_list_editor, show_label=False ),show_border=True,label='Background File'),
+            Group(Item(name='ref_data',editor=string_list_editor, show_label=False  ),show_border=True,label='Reference File'),
+
+
+        ),
+        title = 'Supplemental file data',
+        scrollable = True,
+        resizable = True,
+
+
+    )
 
 
 class BaseMeasurement(HasTraits):
@@ -31,11 +54,13 @@ class BaseMeasurement(HasTraits):
 
     is_selected = Bool(False)
 
-    def __init__(self, main):
+    def __init__(self, **kargs):
         HasTraits.__init__(self)
-        self.main = main
+        self.main = kargs.get('main', None)
 
     def _anytrait_changed(self):
+        if self.main is None:
+            return
         self.main.dirty = True
 
     def _get_summary(self):
@@ -50,20 +75,23 @@ class SpectrumMeasurement(BaseMeasurement):
 
     ex_pol = Int()  # Excitation Polarization
     em_pol = Int()  # Emission Polarization
+
     ex_wl = Float()  # Excitation Wavelength
     em_wl = Tuple((0.0, 0.0), cols=2, labels=['Min', 'Max'])  # Emission Wavelength
+
     e_per_count = Int(1)  # electrons per ADC count
 
     #####       Extracted Data      #####
     signal = Array()
     bg = Array()
     ref = Array()
+    file_data = Dict()
 
     #####       Flags      #####
-    has_sig = Bool(False)
-    has_bg = Bool(False)
-    has_ref = Bool(False)
-    color = Tuple(0.0, 0.0, 0.0)  # Enum(['r', 'g', 'b', 'y', 'g', 'k','m','c','k'])
+    has_sig = Property(Bool) #Bool(False)
+    has_bg = Property(Bool) #Bool(False)
+    has_ref = Property(Bool) #Bool(False)
+    color = Property() #Tuple(0.0, 0.0, 0.0)  # Enum(['r', 'g', 'b', 'y', 'g', 'k','m','c','k'])
 
     #####       Calculated Data      #####
 
@@ -97,6 +125,26 @@ class SpectrumMeasurement(BaseMeasurement):
     def _get_summary(self):
         report = 'Excitation: %d nm'%self.ex_wl + ' | Emission Range: %d:%d nm'%self.em_wl
         return report
+
+    def _get_has_sig(self):
+        if len(self.signal):
+            return True
+        else:
+            return False
+    def _get_color(self):
+        return wl_to_rgb(self.ex_wl)
+
+    def _get_has_bg(self):
+        if len(self.bg):
+            return True
+        else:
+            return False
+
+    def _get_has_ref(self):
+        if len(self.ref):
+            return True
+        else:
+            return False
 
     def _signal_default(self):
         return np.array([])
@@ -136,12 +184,19 @@ class SpectrumMeasurement(BaseMeasurement):
         return np.array(sorted(averaged))
 
     def plot_data(self):
-        ser = self.create_series()
-        ax = ser.plot(color=self.color, label=str(self.ex_wl), legend=True)
-        ax.set_xlabel('Emission Wavelength')
-        ax.set_ylabel('Counts')
-        # plt.show()
+        if self.has_sig:
+            ser = self.create_series()
+            ax = ser.plot(color=self.color, label=str(self.ex_wl), legend=True)
+            ax.set_xlabel('Emission Wavelength')
+            ax.set_ylabel('Counts')
+            plt.show()
 
+    def show_file_data(self):
+        viewer = FileDataViewer()
+        viewer.sig_data = self.file_data['sig']
+        viewer.bgd_data = self.file_data['bgd']
+        viewer.ref_data = self.file_data['ref']
+        viewer.edit_traits()
 
 
 class AnealingMeasurement(BaseMeasurement):
@@ -165,9 +220,10 @@ class MeasurementTableEditor(TableEditor):
     columns = [
                CheckboxColumn(name='is_selected', label='', width=0.05, horizontal_alignment='center', ),
                ObjectColumn(name='name', label='Name', horizontal_alignment='left', width=0.25),
+               ObjectColumn(name='summary', label='Details', width=0.3, horizontal_alignment='center', ),
                ObjectColumn(name='date', label='Date', horizontal_alignment='left', width=0.25),
                ObjectColumn(name='__kind__', label='Type', width=0.25, horizontal_alignment='center'),
-               ObjectColumn(name='summary', label='Details', width=0.3, horizontal_alignment='center',),
+
 
                ]
 

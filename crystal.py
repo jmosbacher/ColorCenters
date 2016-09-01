@@ -19,8 +19,9 @@ try:
 except:
     import pickle
 
-from measurement import BaseMeasurement,SpectrumMeasurement, MeasurementTableEditor
-from auxilary_functions import merge_experiments
+from experiment import BaseExperiment,SpectrumExperiment, ExperimentTableEditor
+from measurement import SpectrumMeasurement
+from auxilary_functions import merge_spectrums
 from data_importing import AutoSpectrumImportTool
 
 
@@ -35,93 +36,162 @@ class Crystal(HasTraits):
     notes =Str('Notes...')
 
 
-    measurements = List(BaseMeasurement)
-    selected = Instance(BaseMeasurement)
+    experiments = List(BaseExperiment)
+    selected = Instance(BaseExperiment)
 
     #####       Data      #####
 
 
     #####       Flags      #####
     is_selected = Bool(False)
-    has_measurements = Property()
+    has_experiments = Property()
 
     #####       Info      #####
     ex_wl_range = Property(Tuple)
     em_wl_range = Property(Tuple)
-    measurement_cnt = Property(Int)
+    experiment_cnt = Property(Int)
 
     #####       UI      #####
     add_type = Enum(['Spectrum', 'Raman', 'Anealing'])
-    add_meas = Button('Add')
+    add_exp = Button('Add Experiment')
     edit = Button('Open')
     remove = Button('Remove Selected')
     select_all = Button('Select All')
     unselect_all = Button('Un-select All')
     plot_selected = Button('Plot')
     merge = Button('Merge')
-    import_meas = Button('Import Measurements')
+    #import_exp = Button('Import Experiment')
+    comp_sel = Button('Compare selected')
+    plot_1d = Button('Plot 1D')
+    plot_2d = Button('Plot 2D')
+    plot_3d = Button('Plot 3D')
 
+    #####       Visualization     #####
+    kind = Enum('Spectrum',['Spectrum', 'Raman'])
+    alpha = Float(0.6)
 
     #####       GUI View     #####
     view = View(
+        VSplit(
+            VGroup(
+
+                HGroup(
+                    Item(name='select_all', show_label=False),
+                    Item(name='unselect_all', show_label=False),
+                    Item(name='remove', show_label=False, enabled_when='selected'),
+                    Item(name='merge', show_label=False),
+
+                    Item(name='comp_sel', show_label=False, enabled_when='selected'),
+                    # Item(name='add_type', show_label=False),
+                    Item(name='add_exp', show_label=False),
+
+                show_border=True, label='Experiments'),
+                Item(name='experiments', show_label=False, editor=ExperimentTableEditor(selected='selected')),
+                HGroup(
+                    #Item(name='kind', show_label=False, enabled_when='selected'),
+                    Item(name='alpha', label='Transparency', enabled_when='selected'),
+                    Item(name='plot_1d', show_label=False, enabled_when='selected'),
+                    Item(name='plot_2d', show_label=False, enabled_when='selected'),
+                    Item(name='plot_3d', show_label=False, enabled_when='selected'),
+                    show_border=True, label='Visualization'),
+            ),
 
         VGroup(
 
             Group(
-                Item(name='selected',style='custom', show_label=False),
-
+                Item(name='selected', style='custom', show_label=False),
 
             ),
-            Group(
-                Item(name='measurements', show_label=False, editor=MeasurementTableEditor(selected='selected')),
-                show_border=True, label='Datasets'),
-            HGroup(
-                    Item(name='select_all', show_label=False),
-                    Item(name='unselect_all', show_label=False),
-                    Item(name='remove', show_label=False,enabled_when='selected'),
-                   Item(name='merge', show_label=False),
-                    Item(name='plot_selected', show_label=False, enabled_when='selected'),
-                  ),
 
-            show_border=True, label='Spectrum'),
+                show_border=True, label='Selected'),
+
+        ),
+
         title='Crystal Editor',
         buttons=['OK'],
         kind='nonmodal',
         scrollable=True,
         resizable=True,
         height=800,
-        width=1000,
+        width=1280,
 
     )
 
     #####       Initialization Methods      #####
-    def __init__(self, main):
+    def __init__(self, **kargs):
         HasTraits.__init__(self)
-        self.main = main
+        self.main = kargs.get('main', None)
 
     def _anytrait_changed(self):
+        if self.main is None:
+            return
         self.main.dirty = True
 
-    def _get_has_measurements(self):
-        if self.measurements is None:
+    def _get_has_experiments(self):
+        if self.experiments is None:
             return False
-        if len(self.measurements):
+        if len(self.experiments):
             return True
         else:
             return False
-        
-    def import_meas_fired(self):
-        tool = AutoSpectrumImportTool(self.main,self.measurements)
+
+    def _plot_1d_fired(self, ):
+        self.selected.plot_1d(self.kind)
+
+    def _plot_2d_fired(self):
+        self.selected.plot_2d(self.kind)
+
+    def _plot_3d_fired(self):
+        self.selected.plot_3d(self.alpha, self.kind)
+
+    def _add_exp_fired(self):
+        self.experiments.append(SpectrumExperiment(main=self.main))
+
+    def _comp_sel_fired(self):
+        sel = []
+        for meas in self.experiments:
+            if meas.is_selected:
+                sel.append(meas)
+        if len(sel)!=2:
+            return
+        new_exp = SpectrumExperiment(main=self.main)
+        new_exp.name = sel[0].name +' vs '+sel[1].name
+        for first in sel[0].measurements:
+            for second in sel[1].measurements:
+                if first.ex_wl==second.ex_wl:
+                    if first.has_signal and second.has_signal:
+                        big = first
+                        small = second
+                        if np.average(second.signal[0,:])>np.average(first.signal[0,:]):
+                            big = second
+                            small = first
+                        new_meas = SpectrumMeasurement(main=self.main)
+                        new_meas.ex_wl = first.ex_wl
+                        new_meas.name = first.name
+                        big_signal = big.bin_data()
+                        small_signal = small.bin_data()
+                        signal = []
+                        for wl_b, cnts_b in big_signal:
+                            for wl_s, cnts_s in small_signal:
+                                if wl_b==wl_s:
+                                    signal.append([wl_b,cnts_b-cnts_s])
+                        new_meas.signal = np.array(signal)
+                        new_exp.measurements.append(new_meas)
+        self.experiments.append(new_exp)
+
+
+    def import_data(self):
+        tool = AutoSpectrumImportTool(self.selected)
         tool.edit_traits()
 
     def _selected_default(self):
-        return SpectrumMeasurement(self.main)
+        return SpectrumExperiment(main=self.main)
 
     #####       Private Methods      #####
 
     def _get_ex_wl_range(self):
         wls = [10000,0]
-        for exp in self.measurements:
+        for exp in self.experiments:
             if exp.__kind__ == 'Spectrum':
                 wls[0] = round(min(exp.ex_wl,wls[0]))
                 wls[1] = round(max(exp.ex_wl,wls[1]))
@@ -129,52 +199,52 @@ class Crystal(HasTraits):
 
     def _get_em_wl_range(self):
         wls = [10000,0]
-        for exp in self.measurements:
+        for exp in self.experiments:
             if exp.__kind__ == 'Spectrum':
                 wls[0] = round(min(exp.em_wl[0],wls[0]))
                 wls[1] = round(max(exp.em_wl[1],wls[1]))
         return tuple(wls)
 
-    def _get_measurement_cnt(self):
-        return len(self.measurements)
+    def _get_experiment_cnt(self):
+        return len(self.experiments)
 
     def _edit_fired(self):
         self.selected.edit_traits()
 
     def _remove_fired(self):
-        self.measurements.remove(self.selected)
+        self.experiments.remove(self.selected)
 
     def _plot_selected_fired(self):
-        for exp in self.measurements:
+        for exp in self.experiments:
             if exp.is_selected:
                 exp.plot_data()
 
     def _select_all_fired(self):
-        for exp in self.measurements:
+        for exp in self.experiments:
             exp.is_selected = True
 
     def _unselect_all_fired(self):
-        for exp in self.measurements:
+        for exp in self.experiments:
             exp.is_selected = False
 
     def _merge_fired(self):
         for_merge = []
 
-        for exp in self.measurements:
+        for exp in self.experiments:
             if exp.is_selected:
                 for_merge.append(exp)
         main = for_merge[0]
         rest = for_merge[1:]
         for exp in rest:
-            main = merge_experiments(main, exp)
-            self.measurements.remove(exp)
+            main = merge_spectrums(main, exp)
+            self.experiments.remove(exp)
         main.is_selected = False
 
 
     #####      Public Methods      #####
     def add_new(self):
-        new = SpectrumMeasurement(self.main)
-        self.measurements.append(new)
+        new = SpectrumExperiment(main=self.main)
+        self.experiments.append(new)
         self.selected = new
         return new
 
@@ -183,18 +253,18 @@ class Crystal(HasTraits):
         #path = os.path.join(localdir,'saved.spctrm')
         path = self.save_load_path
         with open(path,'wb') as f:
-            pickle.dump(self.measurements, f)
+            pickle.dump(self.experiments, f)
 
     def load_from_file(self):
         #localdir = os.path.dirname(os.path.abspath(__file__))
         #path = os.path.join(localdir,'saved.spctrm')
         path = self.save_load_path
         with open(path, 'rb') as f:
-            self.measurements = pickle.load(f)
+            self.experiments = pickle.load(f)
 
     def make_dataframe(self):
         data = {}
-        for exp in self.measurements:
+        for exp in self.experiments:
             data[exp.ex_wl] = exp.create_series()
         return pd.DataFrame(data)
 
@@ -203,79 +273,7 @@ class Crystal(HasTraits):
         result = df.to_csv(path)
         return result
 
-    def plot_1d(self,kind):
 
-        for exp in self.measurements:
-            if exp.__kind__ == kind:
-                exp.plot_data()
-
-        """
-        df = self.make_dataframe()
-        ax = df.plot()
-        ax.set_xlabel('Emission Wavelength')
-        ax.set_ylabel('Counts')
-        plt.show()
-        """
-
-
-    def plot_2d(self,kind):
-        jet = plt.get_cmap('jet')
-        fig = plt.figure()
-        ax = fig.add_subplot(111)
-        for data in self.measurements:
-            if data.__kind__ == kind:
-                sig = data.bin_data()
-                xs = sig[:,0]
-                ys = np.array([data.ex_wl]*len(sig[:,0]))
-                cNorm = colors.Normalize(vmin=min(sig[:,1]), vmax=max(sig[:,1]))
-                scalarMap = cmx.ScalarMappable(norm=cNorm, cmap=jet)
-                cs = scalarMap.to_rgba(sig[:,1])
-                ax.scatter(xs,ys,color=cs)
-        ax.set_xlabel('Emission Wavelength')
-        ax.set_ylabel('Excitation Wavelength')
-        plt.show()
-
-    def plot_3d(self,alpha,kind):
-        """
-
-        :return:
-        """
-        fig = plt.figure()
-        ax = fig.gca(projection='3d')
-
-        def cc(arg):
-            return colorConverter.to_rgba(arg, alpha=0.6)
-        #col_options = [cc('r'), cc('g'), cc('b'), cc('y')]
-
-        verts = []
-        colors = []
-        zs = []
-        wl_range = [3000,0]
-        cnt_range = [0,10]
-        for data in self.measurements:
-            if data.__kind__ == kind:
-                sig = data.bin_data()
-                #print sig
-                if len(sig):
-                    zs.append(data.ex_wl)
-                    if min(sig[:,1])<0:
-                        sig[:,1] = sig[:,1] + abs(min(sig[:,1]))
-                    sig[-1, 1] = sig[0, 1] = 0
-                    verts.append(sig)
-                    colors.append(data.color)
-                wl_range = [min(wl_range[0],min(sig[:,0])),max(wl_range[1],max(sig[:,0]))]
-                cnt_range = [min(cnt_range[0], min(sig[:, 1])), max(cnt_range[1], max(sig[:, 1]))]
-        poly = PolyCollection(verts,closed=False, facecolors=colors) #
-
-        poly.set_alpha(alpha)
-        ax.add_collection3d(poly, zs=zs, zdir='y')
-        ax.set_xlabel('Emission')
-        ax.set_xlim3d(wl_range)
-        ax.set_ylabel('Excitation')
-        ax.set_ylim3d(min(zs)-10, max(zs)+10)
-        ax.set_zlabel('Counts')
-        ax.set_zlim3d(cnt_range)
-        plt.show()
 
 
 
@@ -287,14 +285,14 @@ class CrystalTableEditor(TableEditor):
 
                 ObjectColumn(name='sn', label='SN', width=0.25, horizontal_alignment='left', editable=True),
 
-                ObjectColumn(name = 'ex_wl_range',label = 'Excitation WLs',horizontal_alignment = 'center',
-                             width = 0.13,editable=False),
+                #ObjectColumn(name = 'ex_wl_range',label = 'Excitation WLs',horizontal_alignment = 'center',
+                             #width = 0.13,editable=False),
 
-                ObjectColumn(name = 'em_wl_range',label = 'Emission WLs',width = 0.13,
-                             horizontal_alignment = 'center',editable=False),
+                #ObjectColumn(name = 'em_wl_range',label = 'Emission WLs',width = 0.13,
+                             #horizontal_alignment = 'center',editable=False),
                 #ObjectColumn(name = 'em_pol',label = 'Emission POL',width = 0.08,horizontal_alignment = 'center'),
 
-                ObjectColumn(name='measurement_cnt', label='Datasets', width=0.08,
+                ObjectColumn(name='experiment_cnt', label='Experiments', width=0.08,
                              horizontal_alignment='center',editable=False),
 
                 ObjectColumn(name='desc', label='Description', width=0.08,

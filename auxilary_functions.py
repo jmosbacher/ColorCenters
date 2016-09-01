@@ -1,7 +1,8 @@
 import numpy as np
 import math
 import os
-from oct2py import octave as oc
+from experiment import SpectrumExperiment
+from measurement import SpectrumMeasurement
 
 
 
@@ -85,7 +86,7 @@ def color_map(wl):
         col = 'r'
     return col
 
-def merge_experiments(spectrum1,spectrum2):
+def merge_spectrums(spectrum1,spectrum2):
     """
 
     :param spectrum1:
@@ -95,11 +96,8 @@ def merge_experiments(spectrum1,spectrum2):
 
     spectrum1.em_wl = (min(spectrum1.em_wl[0],spectrum2.em_wl[0]),max(spectrum1.em_wl[1],spectrum2.em_wl[1]))
     spectrum1.signal = np.append(spectrum1.signal, spectrum2.signal,axis=0)
-    if len(spectrum1.signal):
-        spectrum1.has_sig = True
-        spectrum1.bg = np.append(spectrum1.bg, spectrum2.bg,axis=0)
     if len(spectrum1.bg):
-        spectrum1.has_bg = True
+        spectrum1.bg = np.append(spectrum1.bg, spectrum2.bg,axis=0)
     return spectrum1
 
 
@@ -114,30 +112,28 @@ def merge_crystals(col1,col2):
     return col1
 
 
-def read_sif_file(path):
-    """
-    Wrapper for the matlab sif reader
-    sifread.m must be same directory as this .py file
-    :param path: path to file
-    :return: data, background, ref
-    """
-    localdir = os.path.dirname(os.path.abspath(__file__))
-    oc.addpath(localdir)
-    return oc.sifread(path)
-
 def read_ascii_file(path, file_del):
     data = []
+    sup = []
     with open(path, 'r') as f:
+        sig = True
         for line in f:
             if line in ['\n', '\r\n']:
-                break
-            s = line.split(file_del)
-            data.append([eval(s[0]), eval(s[1])])
+                sig = False
+                continue
+            if sig:
+                s = line.split(file_del)
+                data.append([eval(s[0]), eval(s[1])])
+            else:
+                sup.append(line)
     if len(data):
-        return data
+        return data, sup
     return None
 
-def organize_data(in_data,tags=('sig','bg','ref')):
+
+
+
+def organize_data(in_data,tags=('sig','bgd','ref'), ext='.asc'):
     '''
     :param data: Dictionary {file name: data array}
     :param data: text tags to organize by
@@ -145,14 +141,40 @@ def organize_data(in_data,tags=('sig','bg','ref')):
     '''
 
     out = {}
-
     for name, data in in_data.items():
+
         for tag in tags:
+
             if tag in name:
-                if name.replace(tag,'') in out.keys():
-                    out[name.replace('_' + tag,'')][tag] = data
+                if name.replace('_' + tag,'').replace(ext, '') in out.keys():
+                    out[name.replace('_' + tag,'').replace(ext, '')][tag] = data
                 else:
-                    out[name.replace('_' + tag, '')] = {tag:data}
+                    out[name.replace('_' + tag, '').replace(ext, '')] = {tag:data}
     return out
 
 
+def compare_experiments(exp1,exp2,main=None):
+    new_exp = SpectrumExperiment(main=main)
+    new_exp.name = exp1.name + ' vs ' + exp2.name
+    for first in exp1.measurements:
+        for second in exp2.measurements:
+            if first.ex_wl == second.ex_wl:
+                if first.has_signal and second.has_signal:
+                    big = first
+                    small = second
+                    if np.average(second.signal[0, :]) > np.average(first.signal[0, :]):
+                        big = second
+                        small = first
+                    new_meas = SpectrumMeasurement(main=main)
+                    new_meas.ex_wl = first.ex_wl
+                    new_meas.name = first.name
+                    big_signal = big.bin_data()
+                    small_signal = small.bin_data()
+                    signal = []
+                    for wl_b, cnts_b in big_signal:
+                        for wl_s, cnts_s in small_signal:
+                            if wl_b == wl_s:
+                                signal.append([wl_b, cnts_b - cnts_s])
+                    new_meas.signal = np.array(signal)
+                    new_exp.measurements.append(new_meas)
+    return new_exp

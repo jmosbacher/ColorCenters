@@ -39,48 +39,38 @@ class Project(CanSaveMixin):
 
     #####       UI     #####
     add_new = Button('New Crystal')
+    #import_data = Button('Add Measurements')
     remove = Button('Remove')
     edit = Button('Open')
     merge = Button('Merge')
     select_all = Button('Select All')
     unselect_all = Button('Un-select All')
 
-    #####       Visualization     #####
-    kind = Enum('Spectrum',['Spectrum', 'Raman'])
-    alpha = Float(0.6)
-    plot_1d = Button('Plot 1D')
-    plot_2d = Button('Plot 2D')
-    plot_3d = Button('Plot 3D')
+
+
 
     view = View(
         VGroup(
             HGroup(
-                Item(name='name', label='Name'),
-                Item(name='comments', label='Comments',springy=True),
-
+                Item(name='add_new', show_label=False),
+                Item(name='edit', show_label=False, enabled_when='selected'),
+                spring,
+                Item(name='select_all', show_label=False),
+                Item(name='unselect_all', show_label=False),
+                Item(name='remove', show_label=False, enabled_when='selected'),
+                #Item(name='merge', show_label=False),
+                #Item(name='import_data', show_label=False, enabled_when='selected'),
             ),
-            Group(Item(name='notes', show_label=False,springy=True,editor=TextEditor(multi_line=True), style='custom'),
-                  show_border=True, label='Notes'),
+
             Group(
 
                 Item(name='crystals', show_label=False, editor=CrystalTableEditor(selected='selected')),
                 show_border=True, label='Crystals'),
-            HGroup(
-                Item(name='edit', show_label=False, enabled_when='selected'),
 
-                Item(name='add_new', show_label=False),
-                Item(name='unselect_all', show_label=False),
-                Item(name='remove', show_label=False, enabled_when='selected'),
-                Item(name='merge', show_label=False),
-                ),
-            HGroup(
-                Item(name='kind', show_label=False, enabled_when='selected'),
-                Item(name='alpha', label='Transparency', enabled_when='selected'),
-                Item(name='plot_1d', show_label=False, enabled_when='selected'),
-                Item(name='plot_1d', show_label=False, enabled_when='selected'),
-                Item(name='plot_1d', show_label=False, enabled_when='selected'),
-                show_border=True, label='Visualization'),
 
+            Group(
+                Item(name='notes', show_label=False, springy=True, editor=TextEditor(multi_line=True), style='custom'),
+                show_border=True, label='Notes'),
             ),
 
 
@@ -94,11 +84,13 @@ class Project(CanSaveMixin):
         width=1000,
 
     )
-    def __init__(self, main):
+    def __init__(self, **kargs):
         HasTraits.__init__(self)
-        self.main = main
+        self.main = kargs.get('main',None)
 
     def _anytrait_changed(self):
+        if self.main is None:
+            return
         self.main.dirty = True
 
     def _get_crystal_cnt(self):
@@ -129,36 +121,34 @@ class Project(CanSaveMixin):
         main.is_selected = False
 
     def _add_new_fired(self):
-        new = Crystal(self.main)
+        new = Crystal(main=self.main)
         self.crystals.append(new)
 
-    def _plot_1d_fired(self,):
-        self.selected.plot_1d(self.kind)
+    #def _import_data_fired(self):
+        #self.selected.import_data()
 
 
-    def _plot_2d_fired(self):
-        self.selected.plot_2d(self.kind)
-
-
-    def _plot_3d_fired(self):
-        self.selected.plot_3d(self.alpha,self.kind)
 
 
 class ProjectTableEditor(TableEditor):
 
     columns = [
-                CheckboxColumn(name='is_selected', label='', width=0.05, horizontal_alignment='center', ),
+                CheckboxColumn(name='is_selected', label='', width=0.1, horizontal_alignment='center', ),
                 ObjectColumn(name = 'name',label = 'Name',width = 0.35,horizontal_alignment = 'left',editable=True),
                 ObjectColumn(name = 'crystal_cnt',label = 'Crystals',horizontal_alignment = 'center',
-                             width = 0.05,editable=False),
+                             width = 0.1,editable=False),
 
-                ObjectColumn(name = 'comments',label = 'Comments',width = 0.55,
+                ObjectColumn(name = 'comments',label = 'Comments',width = 0.45,
                              horizontal_alignment = 'center',editable=False),
                 #ObjectColumn(name = 'em_pol',label = 'Emission POL',width = 0.08,horizontal_alignment = 'center'),
 
 
 
               ]
+    orientation = 'vertical'
+
+
+
 
     auto_size = True
     sortable = False
