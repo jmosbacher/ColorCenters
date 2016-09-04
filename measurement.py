@@ -164,21 +164,45 @@ class SpectrumMeasurement(BaseMeasurement):
         sig = self.bin_data()
         return pd.Series(sig[:, 1], index=sig[:, 0], name=self.ex_wl)
 
-    def bin_data(self):
+    def bin_bg(self):
         """
 
         :return:
         """
+        if not self.has_bg:
+            return {}
         rounded = {}
-        for data in self.signal:
+        for data in self.bg:
             wl = round(data[0])
+            sig = data[1]
             if wl not in rounded.keys():
                 rounded[wl] = []
-            rounded[wl].append(data[1])
+            rounded[wl].append(sig)
+        averaged = {}
+        for wl in rounded.keys():
+            averaged[wl] = np.mean(rounded[wl])
+        # print sorted(averaged)
+
+        return averaged
+
+    def bin_data(self):
+        """
+        :return:
+        """
+        rounded = {}
+
+
+        for data in self.signal:
+            wl = round(data[0])
+            sig = data[1]
+            if wl not in rounded.keys():
+                rounded[wl] = []
+            rounded[wl].append(sig)
 
         averaged = []
-        for wl in rounded.keys():
-            averaged.append([wl, np.mean(rounded[wl])])
+        avg_bg = self.bin_bg()
+        for wl, sigs in rounded.items():
+            averaged.append([wl, np.mean(sigs)-avg_bg.get(wl,0.0)])
         # print sorted(averaged)
 
         return np.array(sorted(averaged))

@@ -18,10 +18,11 @@ except:
     import pickle
 
 from crystal import Crystal, CrystalTableEditor
+from experiment import BaseExperiment
 from auxilary_functions import merge_crystals
 from saving import CanSaveMixin
 from handlers import ProjectHandler
-
+from compare_experiments import AllExperimentList
 
 class Project(CanSaveMixin):
     main = Any()
@@ -31,6 +32,7 @@ class Project(CanSaveMixin):
 
     #####       Data     #####
     crystals = List(Crystal)
+    comparisons = List(BaseExperiment)
     crystal_cnt = Property()
     selected = Instance(Crystal)
 
@@ -45,7 +47,7 @@ class Project(CanSaveMixin):
     merge = Button('Merge')
     select_all = Button('Select All')
     unselect_all = Button('Un-select All')
-
+    compare = Button('All Experiments')
 
 
 
@@ -54,6 +56,7 @@ class Project(CanSaveMixin):
             HGroup(
                 Item(name='add_new', show_label=False),
                 Item(name='edit', show_label=False, enabled_when='selected'),
+                Item(name='compare', show_label=False),
                 spring,
                 Item(name='select_all', show_label=False),
                 Item(name='unselect_all', show_label=False),
@@ -99,6 +102,10 @@ class Project(CanSaveMixin):
     def _edit_fired(self):
         self.selected.edit_traits()
 
+    def _compare_fired(self):
+        comp = AllExperimentList(self)
+        comp.edit_traits()
+
     def _select_all_fired(self):
         for crystal in self.crystals:
             crystal.is_selected = True
@@ -119,7 +126,9 @@ class Project(CanSaveMixin):
             main = merge_crystals(main, crystal)
             self.crystals.remove(crystal)
         main.is_selected = False
-
+    def _remove_fired(self):
+        if self.selected is not None:
+            self.crystals.remove(self.selected)
     def _add_new_fired(self):
         new = Crystal(main=self.main)
         self.crystals.append(new)
@@ -146,9 +155,6 @@ class ProjectTableEditor(TableEditor):
 
               ]
     orientation = 'vertical'
-
-
-
 
     auto_size = True
     sortable = False

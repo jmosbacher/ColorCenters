@@ -1,9 +1,6 @@
 import numpy as np
 import math
 import os
-from experiment import SpectrumExperiment
-from measurement import SpectrumMeasurement
-
 
 
 
@@ -153,28 +150,3 @@ def organize_data(in_data,tags=('sig','bgd','ref'), ext='.asc'):
     return out
 
 
-def compare_experiments(exp1,exp2,main=None):
-    new_exp = SpectrumExperiment(main=main)
-    new_exp.name = exp1.name + ' vs ' + exp2.name
-    for first in exp1.measurements:
-        for second in exp2.measurements:
-            if first.ex_wl == second.ex_wl:
-                if first.has_signal and second.has_signal:
-                    big = first
-                    small = second
-                    if np.average(second.signal[0, :]) > np.average(first.signal[0, :]):
-                        big = second
-                        small = first
-                    new_meas = SpectrumMeasurement(main=main)
-                    new_meas.ex_wl = first.ex_wl
-                    new_meas.name = first.name
-                    big_signal = big.bin_data()
-                    small_signal = small.bin_data()
-                    signal = []
-                    for wl_b, cnts_b in big_signal:
-                        for wl_s, cnts_s in small_signal:
-                            if wl_b == wl_s:
-                                signal.append([wl_b, cnts_b - cnts_s])
-                    new_meas.signal = np.array(signal)
-                    new_exp.measurements.append(new_meas)
-    return new_exp

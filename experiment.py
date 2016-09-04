@@ -26,6 +26,7 @@ class BaseExperiment(HasTraits):
     main = Any()
     name = Str('Name')
     date = Date()
+    crystal_name = Str('')
 
     measurements = List(BaseMeasurement)
     selected = Instance(BaseMeasurement)
@@ -54,6 +55,13 @@ class SpectrumExperiment(BaseExperiment):
     show_file_data = Button('File data')
     sort_by_wl = Button('Sort by WL')
     auto_merge = Button('Merge by WL')
+
+    scale = Float(1)
+    scale_what = Enum('Selected',['All','Selected'])
+    rescale = Button('Rescale')
+
+
+
     #####       Flags      #####
     is_selected = Bool(False)
     has_measurements = Property()
@@ -76,6 +84,9 @@ class SpectrumExperiment(BaseExperiment):
                     Item(name='show_file_data', show_label=False, enabled_when='selected'),
                     #Item(name='add_type', show_label=False),
                     Item(name='add_meas', show_label=False),
+                    Item(name='scale', label='Scale'),
+                    Item(name='scale_what', show_label=False),
+                    Item(name='rescale', show_label=False),
                   ),
             Group(
                 Item(name='measurements', show_label=False, editor=MeasurementTableEditor(selected='selected')),
@@ -140,6 +151,22 @@ class SpectrumExperiment(BaseExperiment):
 
     def _add_meas_fired(self):
         self.import_data()
+
+    def _rescale_fired(self):
+        def rescale(meas,scale):
+            if meas.has_sig:
+                meas.signal[:,1] *= scale
+            if meas.has_bg:
+                meas.bg[:, 1] *= scale
+            if meas.has_ref:
+                meas.ref[:, 1] *= scale
+
+        for meas in self.measurements:
+            if self.scale_what == 'All':
+                rescale(meas,self.scale)
+            elif self.scale_what=='Selected':
+                if meas.is_selected:
+                    rescale(meas, self.scale)
 
     def _auto_merge_fired(self):
         organized = {}
@@ -240,11 +267,12 @@ class SpectrumExperiment(BaseExperiment):
         return result
 
     def plot_1d(self,kind):
-
+        plt.figure()
         for exp in self.measurements:
             if exp.__kind__ == kind:
                 exp.plot_data()
-
+        if self.crystal_name !='':
+            plt.title(self.crystal_name+' '+self.name)
         """
         df = self.make_dataframe()
         ax = df.plot()
@@ -267,6 +295,8 @@ class SpectrumExperiment(BaseExperiment):
                 scalarMap = cmx.ScalarMappable(norm=cNorm, cmap=jet)
                 cs = scalarMap.to_rgba(sig[:,1])
                 ax.scatter(xs,ys,color=cs)
+        if self.crystal_name !='':
+            plt.title(self.crystal_name+' '+self.name)
         ax.set_xlabel('Emission Wavelength')
         ax.set_ylabel('Excitation Wavelength')
         plt.show()
@@ -294,8 +324,8 @@ class SpectrumExperiment(BaseExperiment):
                 #print sig
                 if len(sig):
                     zs.append(data.ex_wl)
-                    if min(sig[:,1])<0:
-                        sig[:,1] = sig[:,1] + abs(min(sig[:,1]))
+                    if min(sig[:,1])!=0:
+                        sig[:,1] = sig[:,1] - min(sig[:,1])
                     sig[-1, 1] = sig[0, 1] = 0
                     verts.append(sig)
                     colors.append(data.color)
@@ -311,6 +341,8 @@ class SpectrumExperiment(BaseExperiment):
         ax.set_ylim3d(min(zs)-10, max(zs)+10)
         ax.set_zlabel('Counts')
         ax.set_zlim3d(cnt_range)
+        if self.crystal_name !='':
+            plt.title(self.crystal_name+' '+self.name)
         plt.show()
 
 
