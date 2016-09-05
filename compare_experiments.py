@@ -42,7 +42,7 @@ class ExperimentComparison(BaseExperiment):
         for meas in self.subtraction.measurements:
             meas.plot_data(ax=axs[2],legend=False)
 
-        plt.suptitle(title)
+        plt.suptitle(title, fontsize=16)
 
     def plot_2d(self, kind, title=''):
         jet = plt.get_cmap('jet')
