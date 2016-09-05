@@ -21,6 +21,119 @@ from experiment import SpectrumExperiment,BaseExperiment, ExperimentTableEditor
 from measurement import SpectrumMeasurement
 
 
+class ExperimentComparison(BaseExperiment):
+
+    exp1 = Instance(BaseExperiment)
+    exp2 = Instance(BaseExperiment)
+    subtraction = Instance(BaseExperiment)
+    has_sub = Property(Bool)
+
+    def plot_1d(self,kind,title=''):
+        f, axs = plt.subplots(3, sharex=True)
+        axs[0].set_title(self.exp1.crystal_name+' '+self.exp1.name)
+        for meas in self.exp1.measurements:
+            meas.plot_data(ax=axs[0],legend=False)
+
+        axs[1].set_title(self.exp1.crystal_name + ' ' + self.exp2.name)
+        for meas in self.exp2.measurements:
+            meas.plot_data(ax=axs[1],legend=False)
+
+        axs[2].set_title('Subtraction')
+        for meas in self.subtraction.measurements:
+            meas.plot_data(ax=axs[2],legend=False)
+
+        plt.suptitle(title)
+
+    def plot_2d(self, kind, title=''):
+        jet = plt.get_cmap('jet')
+        fig = plt.figure()
+        ax = fig.add_subplot(111)
+        for data in self.subtraction.measurements:
+            if data.__kind__ == kind:
+                sig = data.bin_data()
+                xs = sig[:, 0]
+                ys = np.array([data.ex_wl] * len(sig[:, 0]))
+                cNorm = colors.Normalize(vmin=min(sig[:, 1]), vmax=max(sig[:, 1]))
+                scalarMap = cmx.ScalarMappable(norm=cNorm, cmap=jet)
+                cs = scalarMap.to_rgba(sig[:, 1])
+                ax.scatter(xs, ys, color=cs)
+
+        plt.title(title)
+        ax.set_xlabel('Emission Wavelength')
+        ax.set_ylabel('Excitation Wavelength')
+        plt.show()
+
+    def plot_3d(self, alpha, kind, title=''):
+        """
+
+        :return:
+        """
+        fig = plt.figure()
+        ax = fig.gca(projection='3d')
+
+        def cc(arg):
+            return colorConverter.to_rgba(arg, alpha=0.6)
+
+        # col_options = [cc('r'), cc('g'), cc('b'), cc('y')]
+
+        verts = []
+        colors = []
+        zs = []
+        wl_range = [3000, 0]
+        cnt_range = [0, 10]
+        for data in self.measurements:
+            if data.__kind__ == kind:
+                sig = data.bin_data()
+                # print sig
+                if len(sig):
+                    zs.append(data.ex_wl)
+                    if min(sig[:, 1]) != 0:
+                        sig[:, 1] = sig[:, 1] - min(sig[:, 1])
+                    sig[-1, 1] = sig[0, 1] = 0
+                    verts.append(sig)
+                    colors.append(data.color)
+                wl_range = [min(wl_range[0], min(sig[:, 0])), max(wl_range[1], max(sig[:, 0]))]
+                cnt_range = [min(cnt_range[0], min(sig[:, 1])), max(cnt_range[1], max(sig[:, 1]))]
+        poly = PolyCollection(verts, closed=False, facecolors=colors)  #
+
+        poly.set_alpha(alpha)
+        ax.add_collection3d(poly, zs=zs, zdir='y')
+        ax.set_xlabel('Emission')
+        ax.set_xlim3d(wl_range)
+        ax.set_ylabel('Excitation')
+        ax.set_ylim3d(min(zs) - 10, max(zs) + 10)
+        ax.set_zlabel('Counts')
+        ax.set_zlim3d(cnt_range)
+        plt.title(title)
+        plt.show()
+
+    def compare_experiments(self):
+        new_exp = SpectrumExperiment(main=self.exp1.main)
+        self.name = self.exp1.name + ' vs ' + self.exp2.name
+        self.crystal_name = self.exp1.crystal_name + ' vs ' + self.exp2.crystal_name
+        for first in self.exp1.measurements:
+            for second in self.exp2.measurements:
+                if first.ex_wl == second.ex_wl:
+                    if first.has_sig and second.has_sig:
+                        big = first
+                        small = second
+                        if np.average(second.signal[:, 1]) > np.average(first.signal[:, 1]):
+                            big = second
+                            small = first
+                        new_meas = SpectrumMeasurement(main=self.exp1.main)
+                        new_meas.ex_wl = first.ex_wl
+                        new_meas.name = first.name
+                        big_signal = big.bin_data()
+                        small_signal = small.bin_data()
+                        signal = []
+                        for wl_b, cnts_b in big_signal:
+                            for wl_s, cnts_s in small_signal:
+                                if wl_b == wl_s:
+                                    signal.append([wl_b, cnts_b - cnts_s])
+                        new_meas.signal = np.array(signal)
+                        new_exp.measurements.append(new_meas)
+        self.subtraction = new_exp
+
 
 def compare_experiments(exp1,exp2):
     new_exp = SpectrumExperiment(main=exp1.main)
@@ -90,7 +203,7 @@ class AllExperimentList(HasTraits):
     plot_1d = Button('Plot 1D')
     plot_2d = Button('Plot 2D')
     plot_3d = Button('Plot 3D')
-
+    plot_title = Str('')
     #####       Visualization     #####
     plot_sel = Enum('Experiment',['Experiment','Comparison'])
     kind = Enum('Spectrum',['Spectrum', 'Raman'])
@@ -113,6 +226,7 @@ class AllExperimentList(HasTraits):
             HGroup(
                 # Item(name='kind', show_label=False, enabled_when='selected'),
                 Item(name='plot_sel', label='Plot', enabled_when='selected'),
+                Item(name='plot_title', label='Title', enabled_when='selected'),
                 Item(name='plot_1d', show_label=False, enabled_when='selected'),
                 Item(name='plot_2d', show_label=False, enabled_when='selected'),
                 Item(name='alpha', label='Transparency', enabled_when='selected'),
@@ -141,23 +255,23 @@ class AllExperimentList(HasTraits):
         self.compile_experiment_list()
         HasTraits.__init__(self)
 
-    def _plot_1d_fired(self, ):
+    def _plot_1d_fired(self):
         if self.plot_sel=='Experiment':
-            self.selected_exp.plot_1d(self.kind)
+            self.selected_exp.plot_1d(self.kind,title=self.plot_title)
         elif self.plot_sel=='Comparison':
-            self.selected_comp.plot_1d(self.kind)
+            self.selected_comp.plot_1d(self.kind,title=self.plot_title)
 
     def _plot_2d_fired(self):
         if self.plot_sel == 'Experiment':
-            self.selected_exp.plot_2d(self.kind)
+            self.selected_exp.plot_2d(self.kind,title=self.plot_title)
         elif self.plot_sel == 'Comparison':
-            self.selected_comp.plot_2d(self.kind)
+            self.selected_comp.plot_2d(self.kind,title=self.plot_title)
 
     def _plot_3d_fired(self):
         if self.plot_sel == 'Experiment':
-            self.selected_exp.plot_3d(self.alpha,self.kind)
+            self.selected_exp.plot_3d(self.alpha,self.kind,title=self.plot_title)
         elif self.plot_sel == 'Comparison':
-            self.selected_comp.plot_3d(self.alpha, self.kind)
+            self.selected_comp.plot_3d(self.alpha, self.kind,title=self.plot_title)
 
     def compile_experiment_list(self):
         for crystal in self.project.crystals:
@@ -172,55 +286,13 @@ class AllExperimentList(HasTraits):
                 sel.append(exp)
         if len(sel)!=2:
             return
-        comp = compare_experiments(sel[0],sel[1])
+        comp = ExperimentComparison(exp1=sel[0],exp2=sel[1])
+        comp.compare_experiments()
         self.comparisons.append(comp)
 
     def _remove_exp_fired(self):
         self.comparisons.remove(self.selected_exp)
 
-
     def _remove_comp_fired(self):
         self.comparisons.remove(self.selected_comp)
 
-
-class ExperimentComparison(HasTraits):
-
-    exp1 = Instance(BaseExperiment)
-    exp2 = Instance(BaseExperiment)
-    subtraction = Instance(BaseExperiment)
-
-    def plot_1d(self):
-        pass
-
-    def plot_2d(self):
-        pass
-
-    def plot_3d(self):
-        pass
-
-    def compare_experiments(self):
-        new_exp = SpectrumExperiment(main=self.exp1.main)
-        new_exp.name = self.exp1.name + ' vs ' + self.exp2.name
-        new_exp.crystal_name = self.exp1.crystal_name + ' vs ' + self.exp2.crystal_name
-        for first in self.exp1.measurements:
-            for second in self.exp2.measurements:
-                if first.ex_wl == second.ex_wl:
-                    if first.has_sig and second.has_sig:
-                        big = first
-                        small = second
-                        if np.average(second.signal[:, 1]) > np.average(first.signal[:, 1]):
-                            big = second
-                            small = first
-                        new_meas = SpectrumMeasurement(main=self.exp1.main)
-                        new_meas.ex_wl = first.ex_wl
-                        new_meas.name = first.name
-                        big_signal = big.bin_data()
-                        small_signal = small.bin_data()
-                        signal = []
-                        for wl_b, cnts_b in big_signal:
-                            for wl_s, cnts_s in small_signal:
-                                if wl_b == wl_s:
-                                    signal.append([wl_b, cnts_b - cnts_s])
-                        new_meas.signal = np.array(signal)
-                        new_exp.measurements.append(new_meas)
-        return new_exp

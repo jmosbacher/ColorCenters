@@ -266,13 +266,13 @@ class SpectrumExperiment(BaseExperiment):
         result = df.to_csv(path)
         return result
 
-    def plot_1d(self,kind):
+    def plot_1d(self,kind,ax=None,title=''):
         plt.figure()
         for exp in self.measurements:
             if exp.__kind__ == kind:
-                exp.plot_data()
-        if self.crystal_name !='':
-            plt.title(self.crystal_name+' '+self.name)
+                exp.plot_data(ax)
+        plt.title(title)
+
         """
         df = self.make_dataframe()
         ax = df.plot()
@@ -282,7 +282,7 @@ class SpectrumExperiment(BaseExperiment):
         """
 
 
-    def plot_2d(self,kind):
+    def plot_2d(self,kind,title=''):
         jet = plt.get_cmap('jet')
         fig = plt.figure()
         ax = fig.add_subplot(111)
@@ -295,13 +295,13 @@ class SpectrumExperiment(BaseExperiment):
                 scalarMap = cmx.ScalarMappable(norm=cNorm, cmap=jet)
                 cs = scalarMap.to_rgba(sig[:,1])
                 ax.scatter(xs,ys,color=cs)
-        if self.crystal_name !='':
-            plt.title(self.crystal_name+' '+self.name)
+
+        plt.title(title)
         ax.set_xlabel('Emission Wavelength')
         ax.set_ylabel('Excitation Wavelength')
         plt.show()
 
-    def plot_3d(self,alpha,kind):
+    def plot_3d(self,alpha,kind,title=''):
         """
 
         :return:
@@ -341,8 +341,7 @@ class SpectrumExperiment(BaseExperiment):
         ax.set_ylim3d(min(zs)-10, max(zs)+10)
         ax.set_zlabel('Counts')
         ax.set_zlim3d(cnt_range)
-        if self.crystal_name !='':
-            plt.title(self.crystal_name+' '+self.name)
+        plt.title(title)
         plt.show()
 
 

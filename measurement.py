@@ -191,7 +191,6 @@ class SpectrumMeasurement(BaseMeasurement):
         """
         rounded = {}
 
-
         for data in self.signal:
             wl = round(data[0])
             sig = data[1]
@@ -207,10 +206,10 @@ class SpectrumMeasurement(BaseMeasurement):
 
         return np.array(sorted(averaged))
 
-    def plot_data(self):
+    def plot_data(self,ax=None,legend=True):
         if self.has_sig:
             ser = self.create_series()
-            ax = ser.plot(color=self.color, label=str(self.ex_wl), legend=True)
+            ax = ser.plot(color=self.color, label=str(self.ex_wl), legend=legend, ax=ax)
             ax.set_xlabel('Emission Wavelength')
             ax.set_ylabel('Counts')
             plt.show()
