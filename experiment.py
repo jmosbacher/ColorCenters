@@ -134,7 +134,7 @@ class SpectrumExperiment(BaseExperiment):
         return tuple(wls)
 
     def _get_measurement_cnt(self):
-        return len(self.experiments)
+        return len(self.measurements)
 
     def _get_has_measurements(self):
         if self.measurements is None:

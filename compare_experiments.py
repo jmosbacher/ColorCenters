@@ -34,7 +34,7 @@ class ExperimentComparison(BaseExperiment):
         for meas in self.exp1.measurements:
             meas.plot_data(ax=axs[0],legend=False)
 
-        axs[1].set_title(self.exp1.crystal_name + ' ' + self.exp2.name)
+        axs[1].set_title(self.exp2.crystal_name + ' ' + self.exp2.name)
         for meas in self.exp2.measurements:
             meas.plot_data(ax=axs[1],legend=False)
 
@@ -115,16 +115,11 @@ class ExperimentComparison(BaseExperiment):
             for second in self.exp2.measurements:
                 if first.ex_wl == second.ex_wl:
                     if first.has_sig and second.has_sig:
-                        big = first
-                        small = second
-                        if np.average(second.signal[:, 1]) > np.average(first.signal[:, 1]):
-                            big = second
-                            small = first
                         new_meas = SpectrumMeasurement(main=self.exp1.main)
                         new_meas.ex_wl = first.ex_wl
                         new_meas.name = first.name
-                        big_signal = big.bin_data()
-                        small_signal = small.bin_data()
+                        big_signal = first.bin_data()
+                        small_signal = second.bin_data()
                         signal = []
                         for wl_b, cnts_b in big_signal:
                             for wl_s, cnts_s in small_signal:
@@ -166,7 +161,7 @@ def compare_experiments(exp1,exp2):
 class ExperimentListTableEditor(TableEditor):
 
     columns = [
-                CheckboxColumn(name='is_selected', label='', width=0.08, horizontal_alignment='center', ),
+                #CheckboxColumn(name='is_selected', label='', width=0.08, horizontal_alignment='center', ),
                 ObjectColumn(name='crystal_name', label='Crystal', width=0.25, horizontal_alignment='left', editable=True),
                 ObjectColumn(name = 'name',label = 'Name',width = 0.25,horizontal_alignment = 'left',editable=True),
 
@@ -182,8 +177,8 @@ class ExperimentListTableEditor(TableEditor):
                 ObjectColumn(name='measurement_cnt', label='Datasets', width=0.08,
                              horizontal_alignment='center',editable=False),
 
-                ObjectColumn(name='desc', label='Description', width=0.08,
-                             horizontal_alignment='center', editable=False),
+                #ObjectColumn(name='desc', label='Description', width=0.08,
+                             #horizontal_alignment='center', editable=False),
               ]
 
     auto_size = True
@@ -195,7 +190,8 @@ class AllExperimentList(HasTraits):
     experiments = List()
     comparisons = List()
     selected_comp = Instance(BaseExperiment)
-    selected_exp = Instance(BaseExperiment)
+    selected_exp1 = Instance(BaseExperiment)
+    selected_exp2 = Instance(BaseExperiment)
 
     compare = Button('Compare')
     remove_exp = Button('Remove Experiment')
@@ -205,7 +201,8 @@ class AllExperimentList(HasTraits):
     plot_3d = Button('Plot 3D')
     plot_title = Str('')
     #####       Visualization     #####
-    plot_sel = Enum('Experiment',['Experiment','Comparison'])
+    plot_sel = Enum('Comparison',['First','Second', 'Subtraction','Comparison'])
+
     kind = Enum('Spectrum',['Spectrum', 'Raman'])
     alpha = Float(0.6)
 
@@ -215,12 +212,16 @@ class AllExperimentList(HasTraits):
         VSplit(
 
             VGroup(
-                HGroup(
-                    Item(name='compare', show_label=False, ),
-                    Item(name='remove_exp', show_label=False, ),
-                ),
 
-            Item(name='experiments', show_label=False, editor=ExperimentListTableEditor(selected='selected_exp')),
+
+            HGroup(
+                Item(name='experiments', show_label=False, editor=ExperimentListTableEditor(selected='selected_exp1')),
+                Item(name='experiments', show_label=False, editor=ExperimentListTableEditor(selected='selected_exp2')),
+            ),
+            HGroup(
+                    Item(name='compare', show_label=False, ),
+                    #Item(name='remove_exp', show_label=False, ),
+                ),
             ),
         VGroup(
             HGroup(
@@ -256,22 +257,32 @@ class AllExperimentList(HasTraits):
         HasTraits.__init__(self)
 
     def _plot_1d_fired(self):
-        if self.plot_sel=='Experiment':
-            self.selected_exp.plot_1d(self.kind,title=self.plot_title)
-        elif self.plot_sel=='Comparison':
-            self.selected_comp.plot_1d(self.kind,title=self.plot_title)
+        selection = {'First':self.selected_comp.exp1,
+        'Second': self.selected_comp.exp2,
+        'Subtraction': self.selected_comp.subtraction ,
+        'Comparison': self.selected_comp,
+        }
+
+        selection[self.plot_sel].plot_1d(self.kind,title=self.plot_title)
 
     def _plot_2d_fired(self):
-        if self.plot_sel == 'Experiment':
-            self.selected_exp.plot_2d(self.kind,title=self.plot_title)
-        elif self.plot_sel == 'Comparison':
-            self.selected_comp.plot_2d(self.kind,title=self.plot_title)
+        selection = {'First': self.selected_comp.exp1,
+                     'Second': self.selected_comp.exp2,
+                     'Subtraction': self.selected_comp.subtraction,
+                     'Comparison': self.selected_comp,
+                     }
+
+        selection[self.plot_sel].plot_2d(self.kind,title=self.plot_title)
 
     def _plot_3d_fired(self):
-        if self.plot_sel == 'Experiment':
-            self.selected_exp.plot_3d(self.alpha,self.kind,title=self.plot_title)
-        elif self.plot_sel == 'Comparison':
-            self.selected_comp.plot_3d(self.alpha, self.kind,title=self.plot_title)
+        selection = {'First': self.selected_comp.exp1,
+                     'Second': self.selected_comp.exp2,
+                     'Subtraction': self.selected_comp.subtraction,
+                     'Comparison': self.selected_comp,
+                     }
+
+        selection[self.plot_sel].plot_3d(self.alpha,self.kind,title=self.plot_title)
+
 
     def compile_experiment_list(self):
         for crystal in self.project.crystals:
@@ -280,13 +291,8 @@ class AllExperimentList(HasTraits):
                 self.experiments.append(exp)
 
     def _compare_fired(self):
-        sel = []
-        for exp in self.experiments:
-            if exp.is_selected:
-                sel.append(exp)
-        if len(sel)!=2:
-            return
-        comp = ExperimentComparison(exp1=sel[0],exp2=sel[1])
+
+        comp = ExperimentComparison(exp1=self.selected_exp1,exp2=self.selected_exp2)
         comp.compare_experiments()
         self.comparisons.append(comp)
 
