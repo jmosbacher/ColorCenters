@@ -81,7 +81,7 @@ class ExperimentComparison(BaseExperiment):
         zs = []
         wl_range = [3000, 0]
         cnt_range = [0, 10]
-        for data in self.measurements:
+        for data in self.subtraction.measurements:
             if data.__kind__ == kind:
                 sig = data.bin_data()
                 # print sig
@@ -200,6 +200,9 @@ class AllExperimentList(HasTraits):
     plot_2d = Button('Plot 2D')
     plot_3d = Button('Plot 3D')
     plot_title = Str('')
+    plot_1d_1st = Button('Plot')
+    plot_1d_2nd = Button('Plot')
+
     #####       Visualization     #####
     plot_sel = Enum('Comparison',['First','Second', 'Subtraction','Comparison'])
 
@@ -215,8 +218,12 @@ class AllExperimentList(HasTraits):
 
 
             HGroup(
-                Item(name='experiments', show_label=False, editor=ExperimentListTableEditor(selected='selected_exp1')),
-                Item(name='experiments', show_label=False, editor=ExperimentListTableEditor(selected='selected_exp2')),
+                Group(Item(name='experiments', show_label=False, editor=ExperimentListTableEditor(selected='selected_exp1')),
+                      Item(name='plot_1d_1st', show_label=False,),
+                      show_border=True,label='First'),
+                Group(Item(name='experiments', show_label=False, editor=ExperimentListTableEditor(selected='selected_exp2')),
+                      Item(name='plot_1d_2nd', show_label=False, ),
+                      show_border=True, label='Second'),
             ),
             HGroup(
                     Item(name='compare', show_label=False, ),
@@ -264,6 +271,12 @@ class AllExperimentList(HasTraits):
         }
 
         selection[self.plot_sel].plot_1d(self.kind,title=self.plot_title)
+
+    def _plot_1d_1st_fired(self):
+        self.selected_exp1.plot_1d(self.kind)
+
+    def _plot_1d_2nd_fired(self):
+        self.selected_exp2.plot_1d(self.kind)
 
     def _plot_2d_fired(self):
         selection = {'First': self.selected_comp.exp1,
