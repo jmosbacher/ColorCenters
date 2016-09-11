@@ -8,7 +8,7 @@ from matplotlib.colors import colorConverter
 import matplotlib.pyplot as plt
 import matplotlib.colors as colors
 import matplotlib.cm as cmx
-from auxilary_functions import wl_to_rgb
+from auxilary_functions import wl_to_rgb, avg_data_array, bin_data_dict
 from file_selector import string_list_editor
 import numpy as np
 import random
@@ -169,50 +169,55 @@ class SpectrumMeasurement(BaseMeasurement):
 
         :return:
         """
-        if not self.has_bg:
-            return {}
-        rounded = {}
-        for data in self.bg:
-            wl = round(data[0])
-            sig = data[1]
-            if wl not in rounded.keys():
-                rounded[wl] = []
-            rounded[wl].append(sig)
-        averaged = {}
-        for wl in rounded.keys():
-            averaged[wl] = np.mean(rounded[wl])
-        # print sorted(averaged)
+        binned = {}
+        if self.has_bg:
+            averaged = avg_data_array(self.bg)
+            binned = bin_data_dict(averaged)
 
-        return averaged
+        return binned
 
-    def bin_data(self):
+
+
+    def bin_data(self,rem_bg=True):
         """
         :return:
         """
-        rounded = {}
+        if not self.has_sig:
+            return np.zeros((1,2))
 
-        for data in self.signal:
-            wl = round(data[0])
-            sig = data[1]
-            if wl not in rounded.keys():
-                rounded[wl] = []
-            rounded[wl].append(sig)
+        averaged = avg_data_array(self.signal)
+        binned = bin_data_dict(averaged)
 
-        averaged = []
-        avg_bg = self.bin_bg()
-        for wl, sigs in rounded.items():
-            averaged.append([wl, np.mean(sigs)-avg_bg.get(wl,0.0)])
+        if rem_bg:
+            avg_bg = self.bin_bg()
+        else:
+            avg_bg = {}
+        final = []
+        for wl, sig in binned.items():
+            final.append([wl, sig-avg_bg.get(wl,0.0)])
         # print sorted(averaged)
 
-        return np.array(sorted(averaged))
+        return np.array(sorted(final))
+
+    def integrate_range(self,min,max):
+        signal = self.bin_data()
+        in_range = []
+        for wl,sig in signal:
+            if wl<=max and wl>=min:
+                in_range.append(sig)
+        result = np.sum(in_range)
+        return result
+
 
     def plot_data(self,ax=None,legend=True):
         if self.has_sig:
             ser = self.create_series()
             ax = ser.plot(color=self.color, label=str(self.ex_wl), legend=legend, ax=ax)
-            ax.set_xlabel('Emission Wavelength')
-            ax.set_ylabel('Counts')
-            plt.show()
+            if ax is not None:
+                ax.set_xlabel('Emission Wavelength')
+                ax.set_ylabel('Counts')
+            else:
+                plt.show()
 
     def show_file_data(self):
         viewer = FileDataViewer()

@@ -61,7 +61,6 @@ class SpectrumExperiment(BaseExperiment):
     rescale = Button('Rescale')
 
 
-
     #####       Flags      #####
     is_selected = Bool(False)
     has_measurements = Property()
@@ -272,6 +271,7 @@ class SpectrumExperiment(BaseExperiment):
             if exp.__kind__ == kind:
                 exp.plot_data(ax)
         plt.title(title)
+        plt.show()
 
         """
         df = self.make_dataframe()

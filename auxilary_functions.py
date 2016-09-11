@@ -93,7 +93,7 @@ def merge_spectrums(spectrum1,spectrum2):
 
     spectrum1.em_wl = (min(spectrum1.em_wl[0],spectrum2.em_wl[0]),max(spectrum1.em_wl[1],spectrum2.em_wl[1]))
     spectrum1.signal = np.append(spectrum1.signal, spectrum2.signal,axis=0)
-    if len(spectrum1.bg):
+    if len(spectrum2.bg):
         spectrum1.bg = np.append(spectrum1.bg, spectrum2.bg,axis=0)
     return spectrum1
 
@@ -128,7 +128,51 @@ def read_ascii_file(path, file_del):
     return None
 
 
+def avg_data_array(data):
+    all = {}
+    final = {}
+    for wl, sig in data:
+        r_wl = round(wl,ndigits=1)
+        if r_wl in all.keys():
+            all[r_wl].append(sig)
+        else:
+            all[r_wl] = [sig]
 
+    for wl, sigs in all.items():
+        final[wl] = np.mean(sigs)
+    return final
+
+def bin_data_dict(data_dict):
+    binned = {}
+
+    for wl,sig in data_dict.items():
+        r_wl = round(wl)
+        if r_wl not in binned.keys():
+            binned[r_wl] = sig
+        binned[r_wl] += sig
+
+    return binned
+
+def merge_data_arrays(array1,array2,res=0.065):
+    l,r = round(max(min(array1[:,0]),min(array2[:,0])),ndigits=1 ), round(min(max(array1[:,0]),max(array2[:,0])), ndigits=1)
+    idx1 = np.where(np.logical_and((array1[:,0] >= l),(array1[:,0] <= r)))
+    idx2 = np.where(np.logical_and((array2[:,0] >= l), (array2[:,0] <= r)))
+    avgd = []
+    for wl1, sig1 in array1[idx1]:
+        wl = wl1
+        sig = sig1
+        for wl2,sig2 in array2[idx2]:
+            if abs(wl2-wl1)<res:
+                wl = np.mean([wl1, wl2])
+                sig = np.mean([sig1, sig2])
+        avgd.append([wl,sig])
+    overlap = np.asarray(avgd)
+    idx1 = np.where(np.logical_or((array1[:, 0] < l), (array1[:, 0] > r)))
+    idx2 = np.where(np.logical_or((array2[:, 0] < l), (array2[:, 0] > r)))
+    first = array1[idx1]
+    second = array2[idx2]
+    final = np.vstack((first,second,overlap))
+    return np.sort(final,axis=0)
 
 def organize_data(in_data,tags=('sig','bgd','ref'), ext='.asc'):
     '''

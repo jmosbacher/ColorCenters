@@ -43,6 +43,7 @@ class ExperimentComparison(BaseExperiment):
             meas.plot_data(ax=axs[2],legend=False)
 
         plt.suptitle(title, fontsize=16)
+        plt.show()
 
     def plot_2d(self, kind, title=''):
         jet = plt.get_cmap('jet')
@@ -188,7 +189,7 @@ class ExperimentListTableEditor(TableEditor):
 class AllExperimentList(HasTraits):
     project = Any()
     experiments = List()
-    comparisons = List()
+    comparisons = DelegatesTo('project') #List()
     selected_comp = Instance(BaseExperiment)
     selected_exp1 = Instance(BaseExperiment)
     selected_exp2 = Instance(BaseExperiment)
@@ -259,7 +260,7 @@ class AllExperimentList(HasTraits):
 
     def __init__(self,project):
         self.project = project
-        self.comparisons = project.comparisons
+        #self.comparisons = project.comparisons
         self.compile_experiment_list()
         HasTraits.__init__(self)
 
